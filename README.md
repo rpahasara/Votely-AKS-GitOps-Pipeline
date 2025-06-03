@@ -1,6 +1,6 @@
-# 📦 Votely: Microservice Voting App on AKS with Azure DevOps CI & Argo CD GitOps
+# 📦 Votely: Microservice Voting App with Azure DevOps CI & Argo CD GitOps on Minikube
 
-Welcome to **Votely**, a cloud-native microservice-based voting application! 🚀 In this guide, you'll learn how to deploy this app using **Azure DevOps (CI)** and **Argo CD (GitOps)** on **Azure Kubernetes Service (AKS)** or **Minikube (local)**.
+Welcome to **Votely**, a cloud-native microservice-based voting application! 🚀 In this guide, you'll learn how to deploy this app using **Azure DevOps (CI)** and **Argo CD (GitOps)** on **Minikube (local)**.
 
 ---
 
@@ -57,12 +57,13 @@ sudo usermod -aG docker azureuser
 
    * Go to **Project Settings** → **Agent Pools**
    * Create new pool: `azureagent`
-2. Click **New Agent** → Choose **Linux** → Follow instructions
+![Pipeline Screenshot](images/add_a_agent_pool_self_hosted.PNG)
+2. Click **New Agent** → Choose **Linux** → Follow instructions ![Pipeline Screenshot](images/go_to_your_pool_and_add_the_agent.PNG)
 3. Generate a **Personal Access Token (PAT)**:
 
    * Click on your profile → **Security** → Create **PAT**
-4. Complete agent configuration on the VM
-
+4. Complete agent configuration on the VM ![Pipeline Screenshot](images/configure_the_self_hosted_runner_1.PNG) ![Pipeline Screenshot](images/configure_the_self_hosted_runner_2.PNG)
+ 
 ✅ Your VM is now ready and waiting for jobs!
 
 ---
@@ -79,8 +80,8 @@ We will create **3 CI pipelines**:
 
 ### 🔧 Pipeline Setup
 
-1. Go to **Pipelines** → **New Pipeline**
-2. Connect to your Azure Repo → YAML file
+1. Go to **Pipelines** → **New Pipeline** 
+2. Connect to your Azure Repo → YAML file ![Pipeline Screenshot](images/create_pipline_1.jpeg) ![Pipeline Screenshot](images/create_pipline_2.jpeg) ![Pipeline Screenshot](images/create_pipline_3.jpeg) ![Pipeline Screenshot](images/create_pipline_4.jpeg)
 3. Ensure branch is set to `main`
 4. Replace agent pool section:
 
@@ -92,11 +93,104 @@ pool:
 5. Update paths under `variables:`
 
    * `dockerfilePath` as per each service
-6. Add **Build** and **Push** stages
-7. Run pipeline ✅
-8. Repeat steps for `worker` and `result` services
 
-📸 Add relevant screenshots here for setup clarity
+![Pipeline Screenshot](images/remove_microsoft_hosted_runner.PNG)
+![Pipeline Screenshot](images/change_the_trigger_with_path.PNG)
+
+6. Add **Build** and **Push** stages
+
+```yaml
+# Docker
+# Build and push an image to Azure Container Registry
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+  paths:
+    include:
+      - worker/**
+
+resources:
+- repo: self
+
+variables:
+  # Container registry service connection established during pipeline creation
+  dockerRegistryServiceConnection: 'aa7cd50b-c311-4f28-b9fd-fba71cf1d58b'
+  imageRepository: 'worker'
+  containerRegistry: 'votingappsara.azurecr.io'
+  dockerfilePath: '$(Build.SourcesDirectory)/result/Dockerfile'
+  tag: '$(Build.BuildId)'
+
+pool:
+  name: 'azureagent' 
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      name: 'azureagent'
+    steps:
+    - script: |
+        echo "Cleaning agent work directory"
+        rm -rf $(Pipeline.Workspace)/*
+      displayName: "Clean full workspace"
+      
+    - checkout: self
+      clean: true
+      condition: 
+    
+    - script: |
+        git reset --hard
+        git clean -fdx
+      displayName: "Force clean working directory"
+    - task: Docker@2
+      displayName: Build  an image 
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: '$(tag)'
+
+- stage: Push
+  displayName: Push stage
+  jobs:
+  - job: Push
+    displayName: Push
+    pool:
+      name: 'azureagent'
+    steps:
+    - script: |
+        echo "Cleaning agent work directory"
+        rm -rf $(Pipeline.Workspace)/*
+      displayName: "Clean full workspace"
+      
+    - checkout: self
+      clean: true
+      condition: 
+    
+    - script: |
+        git reset --hard
+        git clean -fdx
+      displayName: "Force clean working directory"
+    - task: Docker@2
+      displayName: Push an image to container registry
+      inputs:
+        containerRegistry: '$(dockerRegistryServiceConnection)'
+        repository: '$(imageRepository)'
+        command: 'push'
+        tags: '$(tag)'
+```
+
+7. Run pipeline ✅
+
+![Pipeline Screenshot](images/running_pipline_example.PNG)
+![Pipeline Screenshot](images/All_3_pipelines_are_done.PNG)
+
+9. Repeat steps for `worker` and `result` services
+
 
 ---
 
@@ -176,13 +270,78 @@ After CI builds and pushes images, the new image version must be updated in the 
 
 1. Create folder: `scripts`
 2. Inside, create `update-image.sh`
-3. Add script (you will provide this script in the repo)
+
+```bash
+
+#!/bin/bash
+
+set -x
+
+# Set the repository URL
+REPO_URL="https://<PAT>@dev.azure.com/pahasara/vote-app/_git/vote-app"
+
+# Clone the git repository into the /tmp directory
+git clone "$REPO_URL" /tmp/temp_repo
+
+# Navigate into the cloned repository directory
+cd /tmp/temp_repo
+
+# Make changes to the Kubernetes manifest file(s)
+# For example, let's say you want to change the image tag in a deployment.yaml file
+sed -i "s|image:.*|image: votingappsara.azurecr.io/$2:$3|g" k8s-specifications/$1-deployment.yaml
+
+# Add the modified files
+git add .
+
+# Commit the changes
+git commit -m "Update Kubernetes manifest"
+
+# Push the changes back to the repository
+git push
+
+# Cleanup: remove the temporary directory
+rm -rf /tmp/temp_repo
+
+```
 
 ### 🔧 Add New Stage to CI Pipelines
 
 * Create a new stage: `update-manifest`
 * This will execute `update-image.sh`
-* Add screenshots of stage setup
+
+```yaml
+- stage: Update
+  displayName: Update 
+  jobs:
+  - job: Update
+    displayName: Update
+    pool:
+      name: 'azureagent'
+    steps:
+    - script: |
+        echo "Cleaning agent work directory"
+        rm -rf $(Pipeline.Workspace)/*
+      displayName: "Clean full workspace"
+
+    - checkout: self
+      clean: true
+      condition: 
+    
+    - script: |
+        git reset --hard
+        git clean -fdx
+      displayName: "Force clean working directory"
+      
+    - script: |
+        sed -i 's/\r$//' scripts/updateK8sManifests.sh
+        chmod +x scripts/updateK8sManifests.sh
+      displayName: "Fix Line Endings"
+    - task: ShellScript@2
+      displayName: update the image on Manifest file
+      inputs:
+        scriptPath: 'scripts/updateK8sManifests.sh'
+        args: 'worker $(imageRepository) $(tag)'
+```
 
 ---
 
@@ -228,8 +387,12 @@ spec:
 2. Push to repo → CI pipeline runs → New image pushed
 3. Shell script updates manifest
 4. Argo CD detects manifest change → Deploys update
-5. 🎉 Access services via `localhost:<port>`
 
+![Pipeline Screenshot](images/deploy_to_the_k8s.PNG)
+
+5. 🎉 Access services via `localhost:<port>`
+![Pipeline Screenshot](images/vote_app.PNG)
+![Pipeline Screenshot](images/result_app.PNG)
 ---
 
 ## 📁 Folder Structure Example
