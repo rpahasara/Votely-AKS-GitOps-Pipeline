@@ -94,7 +94,6 @@ pool:
 
    * `dockerfilePath` as per each service
 
-![Pipeline Screenshot](images/remove_microsoft_hosted_runner.PNG)
 ![Pipeline Screenshot](images/change_the_trigger_with_path.PNG)
 
 6. Add **Build** and **Push** stages
