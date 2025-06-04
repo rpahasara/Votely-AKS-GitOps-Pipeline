@@ -6,7 +6,7 @@ Welcome to **Votely**, a cloud-native microservice-based voting application! ğŸš
 
 ## ğŸ› ï¸ Prerequisites
 
-* Azure Free Trial or Student Subscription
+* [Azure Free Trial](https://azure.microsoft.com/?wt.mc_id=studentamb_285874) or [Student Subscription](https://azure.microsoft.com/?wt.mc_id=studentamb_285874)
 * GitHub account
 * Basic understanding of Azure DevOps and Kubernetes
 
@@ -16,7 +16,7 @@ Welcome to **Votely**, a cloud-native microservice-based voting application! ğŸš
 
 ### ğŸ”¹ Create Azure DevOps Project
 
-1. Sign up or log in to [Azure DevOps](https://dev.azure.com/).
+1. Sign up or log in to [Azure DevOps](https://azure.microsoft.com/products/devops/?nav=min&wt.mc_id=studentamb_285874).
 2. Create a new **organization**.
 3. Within the organization, create a new **project**.
 
